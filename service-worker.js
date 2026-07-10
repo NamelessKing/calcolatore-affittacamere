@@ -1,9 +1,9 @@
-const CACHE_NAME = "affittacamere-pwa-v4";
+const CACHE_NAME = "affittacamere-pwa-v5";
 const APP_FILES = [
   "./",
   "./index.html",
   "./style.css",
-  "./script.js",
+  "./script.js?v=5",
   "./manifest.webmanifest",
   "./icon.svg",
   "./tests.html"
@@ -23,7 +23,6 @@ self.addEventListener("activate", event => {
 
 self.addEventListener("fetch", event => {
   if (event.request.method !== "GET") return;
-
   const requestUrl = new URL(event.request.url);
   const isNavigation = event.request.mode === "navigate";
 
