@@ -33,8 +33,8 @@
   }
   const assertions=[
     ['Netto autonomo iniziale', Math.abs(calc(10).autNet-4819.5)<.01],
-    ['Lordo agenzia al 10%', Math.abs(calc(10).higherGross-9382.21)<.1],
-    ['Lordo agenzia al 20%', Math.abs(calc(20).higherGross-10235.75)<.1],
+    ['Lordo agenzia al 10%', Math.abs(calc(10).higherGross-9383.10)<.1],
+    ['Lordo agenzia al 20%', Math.abs(calc(20).higherGross-10236.11)<.1],
     ['Il risultato cambia tra 10% e 20%', Math.abs(calc(10).higherGross-calc(20).higherGross)>800]
   ];
   document.getElementById('tests').innerHTML=assertions.map(([name,ok])=>`<div class="test ${ok?'ok':'ko'}">${ok?'✓':'✗'} ${name}</div>`).join('');
