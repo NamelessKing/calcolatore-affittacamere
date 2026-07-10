@@ -1,132 +1,19 @@
-<!DOCTYPE html>
-<html lang="it">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="Calcolatore semplice per confrontare la gestione autonoma e tramite agenzia di un affittacamere." />
-  <title>Calcolatore Ricavi Affittacamere</title>
-  <meta name="theme-color" content="#176b4d" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-  <meta name="apple-mobile-web-app-title" content="Ricavi Affittacamere" />
-  <link rel="manifest" href="manifest.webmanifest" />
-  <link rel="apple-touch-icon" href="icon.svg" />
-  <link rel="stylesheet" href="style.css" />
-  <style>
-    .decision-section{border:2px solid #9bc9b5;background:linear-gradient(145deg,#f7fffb,#eef8f3)}
-    .decision-summary{font-size:1.04rem;line-height:1.65}
-    .decision-summary strong{color:#17553e}
-    .decision-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-top:16px}
-    .decision-metric{background:#fff;border:1px solid #cfe1d8;border-radius:14px;padding:16px}
-    .decision-metric .metric-label{color:#66736d;font-size:.86rem;margin-bottom:6px}
-    .decision-metric .metric-value{font-size:1.25rem;font-weight:800;overflow-wrap:anywhere}
-    .occupancy-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
-    .occupancy-panel{border:1px solid #cfd9e8;background:#f7f9ff;border-radius:14px;padding:18px}
-    .occupancy-panel.unreachable{border-color:#efb7b4;background:#fff0ef}
-    .occupancy-panel.reached{border-color:#b8dfc8;background:#e9f7ef}
-    .occupancy-main{font-size:1.8rem;font-weight:850;margin:6px 0 12px}
-    .occupancy-detail{display:grid;gap:7px;color:#45514b}
-    .occupancy-note{margin-top:12px;font-weight:700}
-    @media(max-width:800px){.decision-grid{grid-template-columns:1fr}.occupancy-grid{grid-template-columns:1fr}}
-  </style>
-</head>
-<body>
-  <header><div class="inner"><h1>Calcolatore ricavi affittacamere</h1><p>Confronta gestione autonoma e gestione tramite agenzia. Tutti i risultati si aggiornano automaticamente e restano salvati nel browser.</p></div></header>
-  <main class="container">
-    <div class="toolbar"><button id="resetBtn" class="btn-secondary" type="button">Ripristina valori iniziali</button><button id="scrollMessageBtn" class="btn-primary" type="button">Vai al messaggio</button></div>
-    <div id="errorBox" class="error-box" role="alert"></div>
-    <section class="section"><h2>Dati della simulazione</h2><div class="grid grid-3">
-      <div class="field"><label for="rooms">Numero di camere</label><input id="rooms" type="text" inputmode="decimal" value="5" /></div>
-      <div class="field"><label for="days">Giorni del mese</label><input id="days" type="text" inputmode="decimal" value="30" /></div>
-      <div class="field"><label for="averagePrice">Prezzo medio per notte</label><input id="averagePrice" type="text" inputmode="decimal" value="70" /></div>
-      <div class="field"><label for="occupancy">Occupazione media</label><input id="occupancy" type="text" inputmode="decimal" value="60" /><span class="hint">Percentuale da 0 a 100</span></div>
-      <div class="field"><label for="otaCommission">Commissione Booking/OTA</label><input id="otaCommission" type="text" inputmode="decimal" value="23,5" /></div>
-      <div class="field"><label for="agencyCommission">Commissione agenzia</label><input id="agencyCommission" type="text" inputmode="decimal" value="20" /></div>
-      <div class="field"><label for="minimumNet">Obiettivo netto mensile</label><input id="minimumNet" type="text" inputmode="decimal" value="2000" /></div>
-      <div class="field"><label for="desiredIncrease">Incremento netto desiderato</label><input id="desiredIncrease" type="text" inputmode="decimal" value="10" /></div>
-      <div class="field"><label for="fixedCosts">Costi fissi mensili facoltativi</label><input id="fixedCosts" type="text" inputmode="decimal" value="0" /></div>
-      <div class="field"><label for="cleaningCost">Costo pulizie facoltativo</label><input id="cleaningCost" type="text" inputmode="decimal" value="0" /><span class="hint">Inteso come costo totale mensile</span></div>
-      <div class="field"><label for="taxRate">Imposte facoltative</label><input id="taxRate" type="text" inputmode="decimal" value="0" /><span class="hint">Applicate dopo commissioni e costi</span></div>
-    </div><div class="toggles"><label class="toggle"><input id="includeCleaning" type="checkbox" /> Includi pulizie</label><label class="toggle"><input id="includeFixedCosts" type="checkbox" /> Includi costi fissi</label><label class="toggle"><input id="includeTaxes" type="checkbox" /> Includi imposte</label></div></section>
-
-    <section class="section decision-section" aria-live="polite"><h2>Riepilogo decisionale</h2><div id="decisionSummary" class="decision-summary">Calcolo in corso…</div><div class="decision-grid"><div class="decision-metric"><div class="metric-label">Differenza mensile</div><div id="decisionMonthlyDifference" class="metric-value">—</div></div><div class="decision-metric"><div class="metric-label">Differenza annuale</div><div id="decisionAnnualDifference" class="metric-value">—</div></div><div class="decision-metric"><div class="metric-label">Aumento lordo richiesto all’agenzia</div><div id="decisionRequiredIncrease" class="metric-value">—</div></div></div></section>
-
-    <section class="section"><h2>Occupazione necessaria per raggiungere l’obiettivo</h2><p class="hint">Calcolata usando prezzo medio, camere, giorni, commissioni e gli eventuali costi e imposte attivati.</p><div class="occupancy-grid"><div id="occupancyAutPanel" class="occupancy-panel"><h3>Gestione autonoma</h3><div id="requiredOccupancyAut" class="occupancy-main">—</div><div class="occupancy-detail"><span>Notti da vendere: <strong id="requiredNightsAut">—</strong></span><span>Camere medie occupate al giorno: <strong id="requiredRoomsAut">—</strong></span><span>Lordo necessario: <strong id="requiredGrossAut">—</strong></span></div><div id="requiredStatusAut" class="occupancy-note">—</div></div><div id="occupancyAgencyPanel" class="occupancy-panel"><h3>Gestione tramite agenzia</h3><div id="requiredOccupancyAgency" class="occupancy-main">—</div><div class="occupancy-detail"><span>Notti da vendere: <strong id="requiredNightsAgency">—</strong></span><span>Camere medie occupate al giorno: <strong id="requiredRoomsAgency">—</strong></span><span>Lordo necessario: <strong id="requiredGrossAgency">—</strong></span></div><div id="requiredStatusAgency" class="occupancy-note">—</div></div></div></section>
-
-    <section class="section"><h2>Simulatore camere</h2><div class="cards"><div class="card"><div class="label">Notti disponibili</div><div id="availableNights" class="value">—</div></div><div class="card"><div class="label">Notti vendute</div><div id="soldNights" class="value">—</div></div><div class="card"><div class="label">Camere medie occupate al giorno</div><div id="averageOccupiedRooms" class="value">—</div></div><div class="card"><div class="label">Fatturato lordo</div><div id="grossRevenue" class="value">—</div></div></div><div class="split" style="margin-top:16px"><div class="result-panel"><h3>Gestione autonoma</h3><div class="result-row"><span>Netto mensile</span><strong id="simAutonomousNet">—</strong></div><div class="result-row"><span>Netto annuale</span><strong id="simAutonomousAnnual">—</strong></div></div><div class="result-panel"><h3>Gestione tramite agenzia</h3><div class="result-row"><span>Netto mensile</span><strong id="simAgencyNet">—</strong></div><div class="result-row"><span>Netto annuale</span><strong id="simAgencyAnnual">—</strong></div><div id="goalStatus" class="status">—</div></div></div></section>
-    <section class="section"><h2>Confronto dettagliato</h2><div class="split"><div class="result-panel"><h3>Gestione autonoma</h3><div class="result-row"><span>Fatturato lordo</span><strong id="autGross">—</strong></div><div class="result-row"><span>Costo OTA</span><strong id="autOtaCost">—</strong></div><div class="result-row"><span>Percentuale residua</span><strong id="autResidual">—</strong></div><div class="result-row"><span>Netto mensile</span><strong id="autNet">—</strong></div><div class="result-row"><span>Netto annuale</span><strong id="autAnnual">—</strong></div></div><div class="result-panel"><h3>Gestione tramite agenzia</h3><div class="result-row"><span>Fatturato lordo</span><strong id="agencyGross">—</strong></div><div class="result-row"><span>Costo OTA</span><strong id="agencyOtaCost">—</strong></div><div class="result-row"><span>Costo agenzia</span><strong id="agencyCost">—</strong></div><div class="result-row"><span>Totale trattenuto</span><strong id="agencyTotalCost">—</strong></div><div class="result-row"><span>Percentuale residua</span><strong id="agencyResidual">—</strong></div><div class="result-row"><span>Netto mensile</span><strong id="agencyNet">—</strong></div><div class="result-row"><span>Netto annuale</span><strong id="agencyAnnual">—</strong></div></div></div></section>
-    <section class="section"><h2>Pareggio e guadagno superiore</h2><div class="cards"><div class="card"><div class="label">Netto ottenuto autonomamente</div><div id="breakEvenAutNet" class="value">—</div></div><div class="card"><div class="label">Lordo richiesto all'agenzia per pareggiare</div><div id="breakEvenAgencyGross" class="value">—</div></div><div class="card"><div class="label">Incremento lordo richiesto</div><div id="breakEvenIncreaseEuro" class="value">—</div></div><div class="card"><div class="label">Incremento percentuale richiesto</div><div id="breakEvenIncreasePercent" class="value">—</div></div></div><div class="cards" style="margin-top:14px"><div class="card"><div class="label">Netto obiettivo superiore</div><div id="higherTargetNet" class="value">—</div></div><div class="card"><div class="label">Lordo agenzia necessario</div><div id="higherAgencyGross" class="value">—</div></div><div class="card"><div class="label">Incremento lordo in euro</div><div id="higherIncreaseEuro" class="value">—</div></div><div class="card"><div class="label">Incremento lordo in percentuale</div><div id="higherIncreasePercent" class="value">—</div></div></div></section>
-    <section class="section"><h2>Obiettivo netto minimo</h2><div class="split"><div class="result-panel"><h3>Gestione autonoma</h3><div class="result-row"><span>Netto desiderato</span><strong id="goalNetAut">—</strong></div><div class="result-row"><span>Lordo necessario</span><strong id="goalGrossAut">—</strong></div></div><div class="result-panel"><h3>Gestione tramite agenzia</h3><div class="result-row"><span>Netto desiderato</span><strong id="goalNetAgency">—</strong></div><div class="result-row"><span>Lordo necessario</span><strong id="goalGrossAgency">—</strong></div></div></div></section>
-    <section class="section"><h2>Tabella scenari lordi</h2><div class="table-wrap"><table><thead><tr><th>Lordo mensile</th><th>Netto autonomo</th><th>Netto agenzia</th><th>Differenza</th><th>Residuo autonomo</th><th>Residuo agenzia</th></tr></thead><tbody id="scenarioTableBody"></tbody></table></div></section>
-    <section class="section"><h2>Tabella pareggio agenzia</h2><div class="table-wrap"><table><thead><tr><th>Lordo gestione autonoma</th><th>Netto gestione autonoma</th><th>Lordo agenzia per stesso netto</th><th>Incremento richiesto</th><th>Incremento %</th></tr></thead><tbody id="breakEvenTableBody"></tbody></table></div></section>
-    <section class="section"><h2>Scenari salvati</h2><div class="scenario-form"><input id="scenarioName" type="text" maxlength="60" placeholder="Nome dello scenario, ad esempio: Estate 2026" /><button id="saveScenarioBtn" class="btn-primary" type="button">Salva scenario</button></div><div id="scenarioList" class="scenario-list"></div></section>
-    <section id="messageSection" class="section"><h2>Generatore di messaggio</h2><div class="grid"><div class="field"><label for="language">Lingua</label><select id="language"><option value="it">Italiano</option><option value="bn">Bangla</option></select></div></div><div class="message-actions"><button id="generateMessageBtn" class="btn-primary" type="button">Genera messaggio</button><button id="copyMessageBtn" class="btn-secondary" type="button">Copia messaggio</button><span id="copyConfirmation" class="copy-confirmation">Messaggio copiato</span></div><textarea id="generatedMessage" readonly placeholder="Il messaggio apparirà qui."></textarea></section>
-    <footer>Funziona interamente nel browser. Nessun dato viene inviato online.</footer>
-  </main>
-  <script src="script.js?v=5"></script>
-  <script>
-    (() => {
-      const ids = ['rooms','days','averagePrice','occupancy','otaCommission','agencyCommission','minimumNet','desiredIncrease','fixedCosts','cleaningCost','taxRate','includeCleaning','includeFixedCosts','includeTaxes'];
-      const safeSet = (id, value) => { const el = document.getElementById(id); if (el) el.textContent = value; };
-      const requiredFor = (v, residual) => {
-        const taxFactor = v.includeTaxes ? 1 - v.taxRate / 100 : 1;
-        const costs = (v.includeFixedCosts ? v.fixedCosts : 0) + (v.includeCleaning ? v.cleaningCost : 0);
-        if (!(taxFactor > 0) || !(residual > 0) || !(v.rooms > 0) || !(v.days > 0) || !(v.averagePrice > 0)) return null;
-        const gross = (v.minimumNet / taxFactor + costs) / residual;
-        const nights = gross / v.averagePrice;
-        const occupancy = nights / (v.rooms * v.days) * 100;
-        return { gross, nights, occupancy, roomsPerDay: nights / v.days };
-      };
-      const renderRequired = (prefix, panelId, result, currentOccupancy) => {
-        const panel = document.getElementById(panelId);
-        if (!result) {
-          safeSet('requiredOccupancy' + prefix, 'Non calcolabile');
-          safeSet('requiredNights' + prefix, '—'); safeSet('requiredRooms' + prefix, '—'); safeSet('requiredGross' + prefix, '—');
-          safeSet('requiredStatus' + prefix, 'Controlla prezzo, camere, giorni, imposte e commissioni.');
-          panel.className = 'occupancy-panel unreachable'; return;
-        }
-        safeSet('requiredOccupancy' + prefix, percent(result.occupancy));
-        safeSet('requiredNights' + prefix, number(result.nights));
-        safeSet('requiredRooms' + prefix, number(result.roomsPerDay));
-        safeSet('requiredGross' + prefix, money(result.gross));
-        if (result.occupancy > 100) {
-          panel.className = 'occupancy-panel unreachable';
-          safeSet('requiredStatus' + prefix, `Obiettivo non raggiungibile: servirebbe il ${percent(result.occupancy)} di occupazione.`);
-        } else if (currentOccupancy >= result.occupancy) {
-          panel.className = 'occupancy-panel reached';
-          safeSet('requiredStatus' + prefix, `Obiettivo raggiunto con l’occupazione attuale del ${percent(currentOccupancy)}.`);
-        } else {
-          panel.className = 'occupancy-panel';
-          safeSet('requiredStatus' + prefix, `Mancano ${percent(result.occupancy-currentOccupancy)} punti di occupazione.`);
-        }
-      };
-      function refreshDecision() {
-        try {
-          const v = readValues();
-          if (validate(v).length) return;
-          const r = calculate(v);
-          const monthlyDiff = r.autNet - r.agencyNet;
-          const annualDiff = monthlyDiff * 12;
-          const agencyIncrease = r.gross > 0 ? (r.breakEvenGross / r.gross - 1) * 100 : 0;
-          const better = monthlyDiff > 0.01 ? 'La gestione autonoma' : monthlyDiff < -0.01 ? 'La gestione tramite agenzia' : 'Le due modalità';
-          const verb = Math.abs(monthlyDiff) < 0.01 ? 'producono praticamente lo stesso netto' : `produce ${money(Math.abs(monthlyDiff))} in più al mese`;
-          const goalAut = r.autNet >= v.minimumNet ? 'raggiunge' : 'non raggiunge';
-          const goalAgency = r.agencyNet >= v.minimumNet ? 'raggiunge' : 'non raggiunge';
-          document.getElementById('decisionSummary').innerHTML = `<strong>${better}</strong> ${verb}. La gestione autonoma ${goalAut} l’obiettivo di <strong>${money(v.minimumNet)}</strong>; la gestione tramite agenzia ${goalAgency} lo stesso obiettivo. Per pareggiare il netto autonomo, l’agenzia deve generare circa <strong>${money(r.breakEvenGross)}</strong> di lordo mensile.`;
-          safeSet('decisionMonthlyDifference', money(monthlyDiff));
-          safeSet('decisionAnnualDifference', money(annualDiff));
-          safeSet('decisionRequiredIncrease', percent(agencyIncrease));
-          renderRequired('Aut','occupancyAutPanel',requiredFor(v,r.autResidual),v.occupancy);
-          renderRequired('Agency','occupancyAgencyPanel',requiredFor(v,r.agencyResidual),v.occupancy);
-        } catch (error) { console.error('Decision summary error', error); }
-      }
-      let timer;
-      const schedule = () => { clearTimeout(timer); timer = setTimeout(refreshDecision, 140); };
-      ids.forEach(id => { const el = document.getElementById(id); if (el) { el.addEventListener('input', schedule); el.addEventListener('change', schedule); el.addEventListener('blur', schedule); } });
-      document.addEventListener('click', event => { if (event.target && ['calculateBtn','resetBtn'].includes(event.target.id)) setTimeout(refreshDecision, 0); });
-      setTimeout(refreshDecision, 0);
-    })();
-    if ('serviceWorker' in navigator) { window.addEventListener('load', () => { navigator.serviceWorker.register('./service-worker.js').catch(console.error); }); }
-  </script>
-</body>
-</html>
+<!DOCTYPE html><html lang="it"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="Confronto ricavi affittacamere"><meta name="theme-color" content="#176b4d"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Ricavi Camere"><title>Calcolatore Ricavi Affittacamere</title><link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" href="icon.svg"><link rel="stylesheet" href="style.css?v=7"></head><body>
+<header><div class="inner"><h1>Calcolatore ricavi affittacamere</h1><p>Confronta lo stesso fatturato tra gestione autonoma e agenzia, calcola il pareggio e verifica l’obiettivo mensile.</p></div></header>
+<main class="container"><div class="toolbar"><button id="calculateBtn" class="btn-primary">Calcola ora</button><button id="resetBtn" class="btn-secondary">Ripristina</button><a class="btn-link" href="tests.html">Apri test</a></div><div id="changeToast" class="change-toast" role="status" aria-live="polite"></div><div id="errorBox" class="error-box" role="alert" aria-live="assertive"></div>
+<section class="section"><h2>Dati principali</h2><p class="explain">I campi evidenziati aggiornano automaticamente i risultati.</p><div class="grid grid-3">
+<div class="field"><label for="rooms">Numero di camere</label><input id="rooms" inputmode="decimal"></div><div class="field"><label for="days">Giorni del mese</label><input id="days" inputmode="decimal"></div><div class="field"><label for="averagePrice">Prezzo medio per notte</label><input id="averagePrice" inputmode="decimal"></div>
+<div class="field"><label for="occupancy">Occupazione media (%)</label><input id="occupancy" inputmode="decimal"></div><div class="field"><label for="otaCommission">Commissione media Booking/OTA (%)</label><input id="otaCommission" inputmode="decimal"><small>Media complessiva di commissioni, transazioni e IVA sui servizi OTA.</small></div><div class="field"><label for="agencyCommission">Commissione agenzia (%)</label><input id="agencyCommission" inputmode="decimal"></div>
+<div class="field"><label for="agencyCommissionBase">Base commissione agenzia</label><select id="agencyCommissionBase"><option value="gross">Sul fatturato lordo</option><option value="afterOta">Sul fatturato dopo OTA</option></select></div><div class="field"><label for="minimumNet">Obiettivo mensile</label><input id="minimumNet" inputmode="decimal"></div><div class="field"><label for="desiredIncrease">Guadagno desiderato in più (%)</label><input id="desiredIncrease" inputmode="decimal"></div></div>
+<details><summary>Modalità OTA avanzata facoltativa</summary><p class="explain">La modalità semplice usa la percentuale media sopra. Questa sezione è solo informativa e non sostituisce il valore medio finché non viene attivata.</p><div class="grid grid-3"><div class="field"><label for="bookingShare">Prenotazioni Booking (%)</label><input id="bookingShare" inputmode="decimal" value="80"></div><div class="field"><label for="bookingRate">Commissione Booking (%)</label><input id="bookingRate" inputmode="decimal" value="23,5"></div><div class="field"><label for="otherShare">Expedia/VRBO (%)</label><input id="otherShare" inputmode="decimal" value="0"></div><div class="field"><label for="otherRate">Commissione Expedia/VRBO (%)</label><input id="otherRate" inputmode="decimal" value="20"></div><div class="field"><label for="directShare">Prenotazioni dirette (%)</label><input id="directShare" inputmode="decimal" value="20"></div><div class="field"><label for="directRate">Costo diretto (%)</label><input id="directRate" inputmode="decimal" value="0"></div></div><button id="applyWeightedOta" class="btn-secondary">Calcola e applica media ponderata</button><strong id="weightedOtaResult"></strong></details></section>
+<section class="section"><h2>Costi e imposte</h2><p class="explain">I costi sono separati: puoi includerli solo nella modalità che li sostiene.</p><div class="split"><fieldset><legend>Gestione autonoma</legend><div class="cost-grid"><label><input id="autIncludeCleaning" type="checkbox"> Includi pulizie</label><input id="autCleaning" inputmode="decimal" aria-label="Pulizie gestione autonoma"><label><input id="autIncludeFixed" type="checkbox"> Includi costi fissi</label><input id="autFixed" inputmode="decimal" aria-label="Costi fissi gestione autonoma"><label><input id="autIncludeMaintenance" type="checkbox"> Includi manutenzione/altri costi</label><input id="autMaintenance" inputmode="decimal" aria-label="Manutenzione gestione autonoma"></div></fieldset><fieldset><legend>Gestione tramite agenzia</legend><div class="cost-grid"><label><input id="agencyIncludeCleaning" type="checkbox"> Includi pulizie</label><input id="agencyCleaning" inputmode="decimal" aria-label="Pulizie agenzia"><label><input id="agencyIncludeFixed" type="checkbox"> Includi costi fissi</label><input id="agencyFixed" inputmode="decimal" aria-label="Costi fissi agenzia"><label><input id="agencyIncludeExtra" type="checkbox"> Includi costi extra agenzia</label><input id="agencyExtra" inputmode="decimal" aria-label="Costi extra agenzia"><label><input id="agencyIncludeMaintenance" type="checkbox"> Includi manutenzione/altri costi</label><input id="agencyMaintenance" inputmode="decimal" aria-label="Manutenzione agenzia"></div></fieldset></div><div class="tax-row"><label><input id="includeTaxes" type="checkbox"> Includi imposte stimate</label><input id="taxRate" inputmode="decimal" aria-label="Aliquota imposte"><span>%</span></div></section>
+<div id="resultNote" class="notice"></div>
+<section class="section decision"><h2>Riepilogo decisionale</h2><div id="decisionSummary" class="lead"></div><div class="cards"><div class="card"><span>Stesso lordo: differenza mensile</span><strong id="decisionMonthlyDifference">—</strong></div><div class="card"><span>Pareggio agenzia</span><strong id="decisionBreakEven">—</strong></div><div class="card"><span>Obiettivo superiore</span><strong id="decisionHigher">—</strong></div><div class="card"><span>Obiettivo minimo</span><strong id="decisionMinimum">—</strong></div></div></section>
+<section class="section"><h2>Occupazione necessaria</h2><p class="explain">Percentuale richiesta per raggiungere l’obiettivo mensile inserito.</p><div class="split"><div id="requiredAutPanel" class="result-panel"><h3>Autonoma</h3><div class="big" id="requiredOccupancyAut">—</div><p id="requiredDetailsAut"></p></div><div id="requiredAgencyPanel" class="result-panel"><h3>Agenzia</h3><div class="big" id="requiredOccupancyAgency">—</div><p id="requiredDetailsAgency"></p></div></div></section>
+<section class="section"><h2>Risultati principali</h2><p class="explain">Confronto effettuato sullo stesso fatturato lordo.</p><div class="cards"><div class="card"><span>Notti disponibili</span><strong id="availableNights">—</strong></div><div class="card"><span>Notti vendute</span><strong id="soldNights">—</strong></div><div class="card"><span>Camere occupate/giorno</span><strong id="averageOccupiedRooms">—</strong></div><div class="card"><span>Fatturato lordo</span><strong id="grossRevenue">—</strong></div></div><div class="split top"><div id="autPanel" class="result-panel"><h3>Gestione autonoma</h3><div class="result-row"><span id="autResultLabel">Risultato</span><strong id="autNet">—</strong></div><div class="result-row"><span>Commissione OTA</span><strong id="autOtaCost">—</strong></div><div class="result-row"><span>Costi inclusi</span><strong id="autCosts">—</strong></div><div class="result-row"><span>Annuale × 12</span><strong id="autAnnual">—</strong></div><div id="autLoss" class="loss"></div></div><div id="agencyPanel" class="result-panel"><h3>Gestione tramite agenzia</h3><div class="result-row"><span id="agencyResultLabel">Risultato</span><strong id="agencyNet">—</strong></div><div class="result-row"><span>Commissione OTA</span><strong id="agencyOtaCost">—</strong></div><div class="result-row"><span>Commissione agenzia</span><strong id="agencyCost">—</strong></div><div class="result-row"><span>Costi inclusi</span><strong id="agencyCosts">—</strong></div><div class="result-row"><span>Annuale × 12</span><strong id="agencyAnnual">—</strong></div><div id="agencyLoss" class="loss"></div></div></div></section>
+<section class="section"><h2>Pareggio, guadagno superiore e obiettivo minimo</h2><div class="cards"><div class="card"><span>Lordo agenzia per pareggiare</span><strong id="breakEvenGross">—</strong></div><div class="card"><span>Incremento €</span><strong id="breakEvenEuro">—</strong></div><div class="card"><span>Incremento %</span><strong id="breakEvenPct">—</strong></div><div class="card"><span>Lordo agenzia per guadagno superiore</span><strong id="higherGross">—</strong></div><div class="card"><span>Lordo per obiettivo autonoma</span><strong id="goalGrossAut">—</strong></div><div class="card"><span>Lordo per obiettivo agenzia</span><strong id="goalGrossAgency">—</strong></div></div></section>
+<section class="section"><h2>Assunzioni del calcolo</h2><ul id="assumptions"></ul></section>
+<details class="section"><summary>Scenari salvati</summary><div class="scenario-form"><input id="scenarioName" placeholder="Nome scenario"><button id="saveScenarioBtn" class="btn-primary">Salva</button></div><div id="scenarioList"></div></details>
+<details class="section"><summary>Messaggio da condividere</summary><label for="language">Lingua</label><select id="language"><option value="it">Italiano</option><option value="bn">Bangla</option></select><div class="toolbar"><button id="generateMessageBtn" class="btn-primary">Genera messaggio</button><button id="copyMessageBtn" class="btn-secondary">Copia</button><span id="copyConfirmation"></span></div><textarea id="generatedMessage" readonly></textarea></details>
+<footer>Stima indicativa basata sui dati inseriti. Verificare contratto agenzia e trattamento fiscale.</footer></main>
+<script src="core.js?v=7"></script><script src="script.js?v=7"></script><script>if('serviceWorker'in navigator){navigator.serviceWorker.register('./service-worker.js').then(r=>r.update()).catch(console.error)}</script></body></html>
