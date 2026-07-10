@@ -1,4 +1,4 @@
-const CACHE_NAME = "affittacamere-pwa-v5";
+const CACHE_NAME = "affittacamere-pwa-v6";
 const APP_FILES = [
   "./",
   "./index.html",
