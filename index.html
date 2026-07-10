@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Calcolatore semplice per confrontare la gestione autonoma e tramite agenzia di un affittacamere." />
+  <title>Calcolatore Ricavi Affittacamere</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <div class="inner">
+      <h1>Calcolatore ricavi affittacamere</h1>
+      <p>Confronta gestione autonoma e gestione tramite agenzia. Tutti i risultati si aggiornano automaticamente e restano salvati nel browser.</p>
+    </div>
+  </header>
+
+  <main class="container">
+    <div class="toolbar">
+      <button id="resetBtn" class="btn-secondary" type="button">Ripristina valori iniziali</button>
+      <button id="scrollMessageBtn" class="btn-primary" type="button">Vai al messaggio</button>
+    </div>
+
+    <div id="errorBox" class="error-box" role="alert"></div>
+
+    <section class="section">
+      <h2>Dati della simulazione</h2>
+      <div class="grid grid-3">
+        <div class="field"><label for="rooms">Numero di camere</label><input id="rooms" type="text" inputmode="decimal" value="5" /></div>
+        <div class="field"><label for="days">Giorni del mese</label><input id="days" type="text" inputmode="decimal" value="30" /></div>
+        <div class="field"><label for="averagePrice">Prezzo medio per notte</label><input id="averagePrice" type="text" inputmode="decimal" value="70" /></div>
+        <div class="field"><label for="occupancy">Occupazione media</label><input id="occupancy" type="text" inputmode="decimal" value="60" /><span class="hint">Percentuale da 0 a 100</span></div>
+        <div class="field"><label for="otaCommission">Commissione Booking/OTA</label><input id="otaCommission" type="text" inputmode="decimal" value="23,5" /></div>
+        <div class="field"><label for="agencyCommission">Commissione agenzia</label><input id="agencyCommission" type="text" inputmode="decimal" value="20" /></div>
+        <div class="field"><label for="minimumNet">Obiettivo netto mensile</label><input id="minimumNet" type="text" inputmode="decimal" value="2000" /></div>
+        <div class="field"><label for="desiredIncrease">Incremento netto desiderato</label><input id="desiredIncrease" type="text" inputmode="decimal" value="10" /></div>
+        <div class="field"><label for="fixedCosts">Costi fissi mensili facoltativi</label><input id="fixedCosts" type="text" inputmode="decimal" value="0" /></div>
+        <div class="field"><label for="cleaningCost">Costo pulizie facoltativo</label><input id="cleaningCost" type="text" inputmode="decimal" value="0" /><span class="hint">Inteso come costo totale mensile</span></div>
+        <div class="field"><label for="taxRate">Imposte facoltative</label><input id="taxRate" type="text" inputmode="decimal" value="0" /><span class="hint">Applicate dopo commissioni e costi</span></div>
+      </div>
+      <div class="toggles">
+        <label class="toggle"><input id="includeCleaning" type="checkbox" /> Includi pulizie</label>
+        <label class="toggle"><input id="includeFixedCosts" type="checkbox" /> Includi costi fissi</label>
+        <label class="toggle"><input id="includeTaxes" type="checkbox" /> Includi imposte</label>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>Simulatore camere</h2>
+      <div class="cards">
+        <div class="card"><div class="label">Notti disponibili</div><div id="availableNights" class="value">—</div></div>
+        <div class="card"><div class="label">Notti vendute</div><div id="soldNights" class="value">—</div></div>
+        <div class="card"><div class="label">Camere medie occupate al giorno</div><div id="averageOccupiedRooms" class="value">—</div></div>
+        <div class="card"><div class="label">Fatturato lordo</div><div id="grossRevenue" class="value">—</div></div>
+      </div>
+      <div class="split" style="margin-top:16px">
+        <div class="result-panel"><h3>Gestione autonoma</h3><div class="result-row"><span>Netto mensile</span><strong id="simAutonomousNet">—</strong></div><div class="result-row"><span>Netto annuale</span><strong id="simAutonomousAnnual">—</strong></div></div>
+        <div class="result-panel"><h3>Gestione tramite agenzia</h3><div class="result-row"><span>Netto mensile</span><strong id="simAgencyNet">—</strong></div><div class="result-row"><span>Netto annuale</span><strong id="simAgencyAnnual">—</strong></div><div id="goalStatus" class="status">—</div></div>
+      </div>
+    </section>
+
+    <section class="section"><h2>Confronto dettagliato</h2><div class="split">
+      <div class="result-panel"><h3>Gestione autonoma</h3><div class="result-row"><span>Fatturato lordo</span><strong id="autGross">—</strong></div><div class="result-row"><span>Costo OTA</span><strong id="autOtaCost">—</strong></div><div class="result-row"><span>Percentuale residua</span><strong id="autResidual">—</strong></div><div class="result-row"><span>Netto mensile</span><strong id="autNet">—</strong></div><div class="result-row"><span>Netto annuale</span><strong id="autAnnual">—</strong></div></div>
+      <div class="result-panel"><h3>Gestione tramite agenzia</h3><div class="result-row"><span>Fatturato lordo</span><strong id="agencyGross">—</strong></div><div class="result-row"><span>Costo OTA</span><strong id="agencyOtaCost">—</strong></div><div class="result-row"><span>Costo agenzia</span><strong id="agencyCost">—</strong></div><div class="result-row"><span>Totale trattenuto</span><strong id="agencyTotalCost">—</strong></div><div class="result-row"><span>Percentuale residua</span><strong id="agencyResidual">—</strong></div><div class="result-row"><span>Netto mensile</span><strong id="agencyNet">—</strong></div><div class="result-row"><span>Netto annuale</span><strong id="agencyAnnual">—</strong></div></div>
+    </div></section>
+
+    <section class="section"><h2>Pareggio e guadagno superiore</h2><div class="cards">
+      <div class="card"><div class="label">Netto ottenuto autonomamente</div><div id="breakEvenAutNet" class="value">—</div></div><div class="card"><div class="label">Lordo richiesto all'agenzia per pareggiare</div><div id="breakEvenAgencyGross" class="value">—</div></div><div class="card"><div class="label">Incremento lordo richiesto</div><div id="breakEvenIncreaseEuro" class="value">—</div></div><div class="card"><div class="label">Incremento percentuale richiesto</div><div id="breakEvenIncreasePercent" class="value">—</div></div>
+    </div><div class="cards" style="margin-top:14px">
+      <div class="card"><div class="label">Netto obiettivo superiore</div><div id="higherTargetNet" class="value">—</div></div><div class="card"><div class="label">Lordo agenzia necessario</div><div id="higherAgencyGross" class="value">—</div></div><div class="card"><div class="label">Incremento lordo in euro</div><div id="higherIncreaseEuro" class="value">—</div></div><div class="card"><div class="label">Incremento lordo in percentuale</div><div id="higherIncreasePercent" class="value">—</div></div>
+    </div></section>
+
+    <section class="section"><h2>Obiettivo netto minimo</h2><div class="split">
+      <div class="result-panel"><h3>Gestione autonoma</h3><div class="result-row"><span>Netto desiderato</span><strong id="goalNetAut">—</strong></div><div class="result-row"><span>Lordo necessario</span><strong id="goalGrossAut">—</strong></div></div>
+      <div class="result-panel"><h3>Gestione tramite agenzia</h3><div class="result-row"><span>Netto desiderato</span><strong id="goalNetAgency">—</strong></div><div class="result-row"><span>Lordo necessario</span><strong id="goalGrossAgency">—</strong></div></div>
+    </div></section>
+
+    <section class="section"><h2>Tabella scenari lordi</h2><div class="table-wrap"><table><thead><tr><th>Lordo mensile</th><th>Netto autonomo</th><th>Netto agenzia</th><th>Differenza</th><th>Residuo autonomo</th><th>Residuo agenzia</th></tr></thead><tbody id="scenarioTableBody"></tbody></table></div></section>
+    <section class="section"><h2>Tabella pareggio agenzia</h2><div class="table-wrap"><table><thead><tr><th>Lordo gestione autonoma</th><th>Netto gestione autonoma</th><th>Lordo agenzia per stesso netto</th><th>Incremento richiesto</th><th>Incremento %</th></tr></thead><tbody id="breakEvenTableBody"></tbody></table></div></section>
+
+    <section class="section"><h2>Scenari salvati</h2><div class="scenario-form"><input id="scenarioName" type="text" maxlength="60" placeholder="Nome dello scenario, ad esempio: Estate 2026" /><button id="saveScenarioBtn" class="btn-primary" type="button">Salva scenario</button></div><div id="scenarioList" class="scenario-list"></div></section>
+
+    <section id="messageSection" class="section"><h2>Generatore di messaggio</h2><div class="grid"><div class="field"><label for="language">Lingua</label><select id="language"><option value="it">Italiano</option><option value="bn">Bangla</option></select></div></div><div class="message-actions"><button id="generateMessageBtn" class="btn-primary" type="button">Genera messaggio</button><button id="copyMessageBtn" class="btn-secondary" type="button">Copia messaggio</button><span id="copyConfirmation" class="copy-confirmation">Messaggio copiato</span></div><textarea id="generatedMessage" readonly placeholder="Il messaggio apparirà qui."></textarea></section>
+
+    <footer>Funziona interamente nel browser. Nessun dato viene inviato online.</footer>
+  </main>
+  <script src="script.js"></script>
+</body>
+</html>
