@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Test calcolatore affittacamere</title>
+  <style>
+    body{font-family:system-ui,-apple-system,sans-serif;background:#f4f7f5;color:#1f2937;margin:0;padding:24px}
+    main{max-width:760px;margin:auto;background:white;padding:24px;border-radius:18px;box-shadow:0 10px 30px rgba(0,0,0,.08)}
+    h1{margin-top:0}.test{padding:14px 16px;border-radius:12px;margin:10px 0;font-weight:700}.ok{background:#dcfce7;color:#166534}.ko{background:#fee2e2;color:#991b1b}
+    label{display:block;margin-top:20px;font-weight:700}input{font-size:18px;padding:12px;width:100%;box-sizing:border-box;margin-top:8px}.result{font-size:20px;margin-top:12px;padding:14px;background:#eef6f2;border-radius:12px}a{display:inline-block;margin-top:20px}
+  </style>
+</head>
+<body>
+<main>
+  <h1>Diagnostica calcolatore</h1>
+  <p>Questa pagina verifica sia le formule sia l'aggiornamento automatico del campo incremento netto desiderato.</p>
+  <div id="tests"></div>
+  <label for="increase">Incremento netto desiderato (%)</label>
+  <input id="increase" inputmode="decimal" value="10" />
+  <div id="liveResult" class="result"></div>
+  <a href="./">Torna al calcolatore</a>
+</main>
+<script>
+  const fmt = v => new Intl.NumberFormat('it-IT',{style:'currency',currency:'EUR'}).format(v);
+  const parse = v => Number(String(v).trim().replace(',', '.'));
+  function calc(increase){
+    const gross=6300, ota=.235, agency=.20;
+    const autNet=gross*(1-ota);
+    const agencyResidual=1-ota-agency;
+    const target=autNet*(1+increase/100);
+    return {autNet,target,higherGross:target/agencyResidual};
+  }
+  const assertions=[
+    ['Netto autonomo iniziale', Math.abs(calc(10).autNet-4819.5)<.01],
+    ['Lordo agenzia al 10%', Math.abs(calc(10).higherGross-9382.21)<.1],
+    ['Lordo agenzia al 20%', Math.abs(calc(20).higherGross-10235.75)<.1],
+    ['Il risultato cambia tra 10% e 20%', Math.abs(calc(10).higherGross-calc(20).higherGross)>800]
+  ];
+  document.getElementById('tests').innerHTML=assertions.map(([name,ok])=>`<div class="test ${ok?'ok':'ko'}">${ok?'✓':'✗'} ${name}</div>`).join('');
+  const input=document.getElementById('increase');
+  const result=document.getElementById('liveResult');
+  function update(){
+    const value=parse(input.value);
+    if(!Number.isFinite(value)){result.textContent='Valore non valido';return;}
+    const r=calc(value);
+    result.textContent=`Con incremento ${value}%, il netto obiettivo è ${fmt(r.target)} e il lordo richiesto all'agenzia è ${fmt(r.higherGross)}.`;
+  }
+  ['input','change','blur'].forEach(e=>input.addEventListener(e,update));
+  update();
+</script>
+</body>
+</html>
