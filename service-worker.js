@@ -1,11 +1,12 @@
-const CACHE_NAME = "affittacamere-pwa-v2";
+const CACHE_NAME = "affittacamere-pwa-v3";
 const APP_FILES = [
   "./",
   "./index.html",
   "./style.css",
   "./script.js",
   "./manifest.webmanifest",
-  "./icon.svg"
+  "./icon.svg",
+  "./tests.html"
 ];
 
 self.addEventListener("install", event => {
@@ -22,13 +23,32 @@ self.addEventListener("activate", event => {
 
 self.addEventListener("fetch", event => {
   if (event.request.method !== "GET") return;
+
+  const requestUrl = new URL(event.request.url);
+  const isNavigation = event.request.mode === "navigate";
+
+  if (isNavigation) {
+    event.respondWith(
+      fetch(event.request, { cache: "no-store" })
+        .then(response => {
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put("./index.html", copy));
+          return response;
+        })
+        .catch(() => caches.match("./index.html"))
+    );
+    return;
+  }
+
   event.respondWith(
-    fetch(event.request)
+    fetch(event.request, { cache: "no-store" })
       .then(response => {
-        const copy = response.clone();
-        caches.open(CACHE_NAME).then(cache => cache.put(event.request, copy));
+        if (response.ok && requestUrl.origin === self.location.origin) {
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(event.request, copy));
+        }
         return response;
       })
-      .catch(() => caches.match(event.request).then(cached => cached || caches.match("./index.html")))
+      .catch(() => caches.match(event.request))
   );
 });
