@@ -1,53 +1,9 @@
-<!DOCTYPE html>
-<html lang="it">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Test calcolatore affittacamere</title>
-  <style>
-    body{font-family:system-ui,-apple-system,sans-serif;background:#f4f7f5;color:#1f2937;margin:0;padding:24px}
-    main{max-width:760px;margin:auto;background:white;padding:24px;border-radius:18px;box-shadow:0 10px 30px rgba(0,0,0,.08)}
-    h1{margin-top:0}.test{padding:14px 16px;border-radius:12px;margin:10px 0;font-weight:700}.ok{background:#dcfce7;color:#166534}.ko{background:#fee2e2;color:#991b1b}
-    label{display:block;margin-top:20px;font-weight:700}input{font-size:18px;padding:12px;width:100%;box-sizing:border-box;margin-top:8px}.result{font-size:20px;margin-top:12px;padding:14px;background:#eef6f2;border-radius:12px}a{display:inline-block;margin-top:20px}
-  </style>
-</head>
-<body>
-<main>
-  <h1>Diagnostica calcolatore</h1>
-  <p>Questa pagina verifica sia le formule sia l'aggiornamento automatico del campo incremento netto desiderato.</p>
-  <div id="tests"></div>
-  <label for="increase">Incremento netto desiderato (%)</label>
-  <input id="increase" inputmode="decimal" value="10" />
-  <div id="liveResult" class="result"></div>
-  <a href="./">Torna al calcolatore</a>
-</main>
-<script>
-  const fmt = v => new Intl.NumberFormat('it-IT',{style:'currency',currency:'EUR'}).format(v);
-  const parse = v => Number(String(v).trim().replace(',', '.'));
-  function calc(increase){
-    const gross=6300, ota=.235, agency=.20;
-    const autNet=gross*(1-ota);
-    const agencyResidual=1-ota-agency;
-    const target=autNet*(1+increase/100);
-    return {autNet,target,higherGross:target/agencyResidual};
-  }
-  const assertions=[
-    ['Netto autonomo iniziale', Math.abs(calc(10).autNet-4819.5)<.01],
-    ['Lordo agenzia al 10%', Math.abs(calc(10).higherGross-9383.10)<.1],
-    ['Lordo agenzia al 20%', Math.abs(calc(20).higherGross-10236.11)<.1],
-    ['Il risultato cambia tra 10% e 20%', Math.abs(calc(10).higherGross-calc(20).higherGross)>800]
-  ];
-  document.getElementById('tests').innerHTML=assertions.map(([name,ok])=>`<div class="test ${ok?'ok':'ko'}">${ok?'✓':'✗'} ${name}</div>`).join('');
-  const input=document.getElementById('increase');
-  const result=document.getElementById('liveResult');
-  function update(){
-    const value=parse(input.value);
-    if(!Number.isFinite(value)){result.textContent='Valore non valido';return;}
-    const r=calc(value);
-    result.textContent=`Con incremento ${value}%, il netto obiettivo è ${fmt(r.target)} e il lordo richiesto all'agenzia è ${fmt(r.higherGross)}.`;
-  }
-  ['input','change','blur'].forEach(e=>input.addEventListener(e,update));
-  update();
-</script>
-</body>
-</html>
+<!DOCTYPE html><html lang="it"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test formule</title><link rel="stylesheet" href="style.css?v=7"></head><body><main class="container"><section class="section"><h1>Test automatici</h1><p>I test verificano parser, formule dirette e formule inverse.</p><div id="summary" class="notice"></div><div id="tests"></div><a class="btn-link" href="./">Torna all’app</a></section></main><script src="core.js?v=7"></script><script>
+const C=AppCore,results=[];const near=(a,b,t=.02)=>Math.abs(a-b)<=t;function test(name,fn){try{const ok=!!fn();results.push({name,ok})}catch(e){results.push({name,ok:false,error:e.message})}}
+const base={rooms:5,days:30,averagePrice:70,occupancy:60,otaCommission:23.5,agencyCommission:20,agencyCommissionBase:'gross',minimumNet:2000,desiredIncrease:10,taxRate:0,includeTaxes:false,autCleaning:0,autFixed:0,autMaintenance:0,agencyCleaning:0,agencyFixed:0,agencyExtra:0,agencyMaintenance:0,autIncludeCleaning:false,autIncludeFixed:false,autIncludeMaintenance:false,agencyIncludeCleaning:false,agencyIncludeFixed:false,agencyIncludeExtra:false,agencyIncludeMaintenance:false};
+test('Parser 6000',()=>C.parseLocaleNumber('6000',{monetary:true})===6000);test('Parser 6000,50',()=>C.parseLocaleNumber('6000,50',{monetary:true})===6000.5);test('Parser 6000.50',()=>C.parseLocaleNumber('6000.50',{monetary:true})===6000.5);test('Parser 6.000',()=>C.parseLocaleNumber('6.000',{monetary:true})===6000);test('Parser 6.000,50',()=>C.parseLocaleNumber('6.000,50',{monetary:true})===6000.5);test('Parser 23,5',()=>C.parseLocaleNumber('23,5')===23.5);test('Parser 23.5',()=>C.parseLocaleNumber('23.5')===23.5);test('Parser spazi',()=>C.parseLocaleNumber(' 6 000,50 ',{monetary:true})===6000.5);test('Campo vuoto = NaN',()=>Number.isNaN(C.parseLocaleNumber('',{monetary:true})));
+const r=C.calculate(base);test('Notti disponibili 150',()=>r.available===150);test('Notti vendute 90',()=>near(r.sold,90));test('Camere medie 3',()=>near(r.avgOccupied,3));test('Lordo 6300',()=>near(r.gross,6300));test('Autonoma 4819,50',()=>near(r.autNet,4819.5));test('Agenzia 3559,50',()=>near(r.agencyNet,3559.5));
+const r6000=C.calculate(base,6000);test('Netto autonomo da 6000 = 4590',()=>near(r6000.autNet,4590));test('Pareggio agenzia 8123,89',()=>near(r6000.breakEvenGross,8123.89,.03));test('Incremento pareggio 2123,89',()=>near(r6000.breakEvenEuro,2123.89,.03));test('Incremento pareggio 35,40%',()=>near(r6000.breakEvenPct,35.398,.03));test('Obiettivo +10% = 5049',()=>near(r6000.targetNet,5049));test('Lordo +10% = 8936,28',()=>near(r6000.higherGross,8936.28,.03));test('Incremento +10% = 48,94%',()=>near(r6000.higherPct,48.938,.03));
+const costs={...base,includeTaxes:true,taxRate:20,autIncludeFixed:true,autFixed:300,autIncludeCleaning:true,autCleaning:200,agencyIncludeFixed:true,agencyFixed:100,agencyIncludeCleaning:true,agencyCleaning:0,agencyIncludeExtra:true,agencyExtra:150};const cr=C.calculate(costs,6000);test('Formula inversa con costi e imposte',()=>near(C.netFromGross(cr.breakEvenGross,cr.agencyResidual,cr.agencyCosts,cr.taxFactor),cr.autNet,.03));test('Costi differenti autonoma/agenzia',()=>cr.autCosts===500&&cr.agencyCosts===250);const after=C.calculate({...base,agencyCommissionBase:'afterOta'},6000);test('Agenzia dopo OTA',()=>near(after.agencyResidual,.612));test('Commissione agenzia dopo OTA',()=>near(after.agencyCost,918));
+const passed=results.filter(x=>x.ok).length;document.getElementById('summary').textContent=`${passed}/${results.length} test superati.`;document.getElementById('tests').innerHTML=results.map(x=>`<div class="card ${x.ok?'good-panel':'bad-panel'}" style="margin-bottom:8px"><strong>${x.ok?'✓':'✗'} ${x.name}</strong>${x.error?`<br>${x.error}`:''}</div>`).join('');window.TEST_RESULTS=results;
+</script></body></html>
