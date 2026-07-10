@@ -13,6 +13,9 @@
   --yellow-bg: #fff7d6;
   --red: #b43a35;
   --red-bg: #fff0ef;
+  --calc-bg: #eef7ff;
+  --calc-border: #5596c8;
+  --calc-focus: rgba(52, 126, 184, .18);
   --shadow: 0 10px 30px rgba(24, 33, 29, 0.08);
   --radius: 16px;
 }
@@ -46,8 +49,25 @@ label { font-weight: 700; font-size: .94rem; }
 input, select, textarea { width: 100%; min-height: 48px; border: 1px solid #bdcac3; border-radius: 12px; padding: 11px 13px; color: var(--text); background: #fff; outline: none; }
 input:focus, select:focus, textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(31, 111, 80, .12); }
 textarea { min-height: 240px; resize: vertical; line-height: 1.55; }
+
+/* Campi azzurri: modificano direttamente uno o più risultati del calcolatore. */
+#rooms, #days, #averagePrice, #occupancy, #otaCommission, #agencyCommission,
+#minimumNet, #desiredIncrease, #fixedCosts, #cleaningCost, #taxRate {
+  background: var(--calc-bg);
+  border: 2px solid var(--calc-border);
+  font-weight: 700;
+}
+#rooms:focus, #days:focus, #averagePrice:focus, #occupancy:focus,
+#otaCommission:focus, #agencyCommission:focus, #minimumNet:focus,
+#desiredIncrease:focus, #fixedCosts:focus, #cleaningCost:focus, #taxRate:focus {
+  border-color: #226b9f;
+  box-shadow: 0 0 0 4px var(--calc-focus);
+}
+#desiredIncrease { background: #fff7d6; border-color: #c99a1a; }
+#minimumNet { background: #f3efff; border-color: #8b6fc2; }
+
 .toggles { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 18px; }
-.toggle { display: inline-flex; align-items: center; gap: 9px; background: var(--surface-soft); border: 1px solid var(--border); border-radius: 999px; padding: 9px 13px; font-weight: 700; }
+.toggle { display: inline-flex; align-items: center; gap: 9px; background: var(--calc-bg); border: 2px solid var(--calc-border); border-radius: 999px; padding: 9px 13px; font-weight: 700; }
 .toggle input { width: 20px; height: 20px; min-height: auto; accent-color: var(--primary); }
 .error-box { display: none; background: var(--red-bg); border: 1px solid #f0b8b5; color: var(--red); padding: 13px 15px; border-radius: 12px; margin-bottom: 18px; font-weight: 700; }
 .cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
