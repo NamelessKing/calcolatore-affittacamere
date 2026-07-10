@@ -1,200 +1,35 @@
-const $ = id => document.getElementById(id);
-
-const DEFAULTS = {
-  rooms: 5, days: 30, averagePrice: 70, occupancy: 60,
-  otaCommission: 23.5, agencyCommission: 20, minimumNet: 2000,
-  desiredIncrease: 10, fixedCosts: 0, cleaningCost: 0, taxRate: 0,
-  includeCleaning: false, includeFixedCosts: false, includeTaxes: false,
-  language: 'it'
-};
-
-const STORAGE_KEY = 'affittacamere-current-v2';
-const SCENARIOS_KEY = 'affittacamere-scenarios-v1';
-const numericIds = ['rooms','days','averagePrice','occupancy','otaCommission','agencyCommission','minimumNet','desiredIncrease','fixedCosts','cleaningCost','taxRate'];
-const checkIds = ['includeCleaning','includeFixedCosts','includeTaxes'];
-const scenarioGrosses = [2000,4000,6000,8000,10000,12000];
-
-const fieldMeta = {
-  rooms: {label:'Numero di camere', sections:['Riepilogo decisionale','Occupazione necessaria','Simulatore camere','Confronto dettagliato','Pareggio','Obiettivo netto']},
-  days: {label:'Giorni del mese', sections:['Riepilogo decisionale','Occupazione necessaria','Simulatore camere','Confronto dettagliato','Pareggio','Obiettivo netto']},
-  averagePrice: {label:'Prezzo medio per notte', sections:['Riepilogo decisionale','Occupazione necessaria','Simulatore camere','Confronto dettagliato','Pareggio','Obiettivo netto']},
-  occupancy: {label:'Occupazione media', sections:['Riepilogo decisionale','Simulatore camere','Confronto dettagliato','Pareggio']},
-  otaCommission: {label:'Commissione Booking/OTA', sections:['Riepilogo decisionale','Occupazione necessaria','Confronto dettagliato','Pareggio','Obiettivo netto']},
-  agencyCommission: {label:'Commissione agenzia', sections:['Riepilogo decisionale','Occupazione necessaria','Gestione tramite agenzia','Pareggio','Obiettivo netto']},
-  minimumNet: {label:'Obiettivo netto mensile', sections:['Riepilogo decisionale','Occupazione necessaria','Obiettivo netto minimo']},
-  desiredIncrease: {label:'Incremento netto desiderato', sections:['Pareggio e guadagno superiore']},
-  fixedCosts: {label:'Costi fissi mensili', sections:['Riepilogo decisionale','Occupazione necessaria','Tutti i netti']},
-  cleaningCost: {label:'Costo pulizie', sections:['Riepilogo decisionale','Occupazione necessaria','Tutti i netti']},
-  taxRate: {label:'Imposte', sections:['Riepilogo decisionale','Occupazione necessaria','Tutti i netti']},
-  includeCleaning: {label:'Inclusione pulizie', sections:['Riepilogo decisionale','Occupazione necessaria','Tutti i netti']},
-  includeFixedCosts: {label:'Inclusione costi fissi', sections:['Riepilogo decisionale','Occupazione necessaria','Tutti i netti']},
-  includeTaxes: {label:'Inclusione imposte', sections:['Riepilogo decisionale','Occupazione necessaria','Tutti i netti']}
-};
-
-function parseNumber(value) {
-  if (typeof value === 'number') return value;
-  const raw = String(value ?? '').trim().replace(/\s/g, '');
-  if (!raw) return NaN;
-  if (raw.includes(',') && raw.includes('.')) {
-    const lastComma = raw.lastIndexOf(',');
-    const lastDot = raw.lastIndexOf('.');
-    return lastComma > lastDot ? Number(raw.replace(/\./g, '').replace(',', '.')) : Number(raw.replace(/,/g, ''));
-  }
-  return Number(raw.replace(',', '.'));
-}
-
-const money = v => new Intl.NumberFormat('it-IT', {style:'currency', currency:'EUR', minimumFractionDigits:2}).format(v);
-const number = (v, max=2) => new Intl.NumberFormat('it-IT', {minimumFractionDigits:0, maximumFractionDigits:max}).format(v);
-const percent = v => `${number(v, 2)}%`;
-
-function readValues() {
-  const v = {};
-  numericIds.forEach(id => v[id] = parseNumber($(id).value));
-  checkIds.forEach(id => v[id] = $(id).checked);
-  v.language = $('language').value;
-  return v;
-}
-
-function validate(v) {
-  const errors = [];
-  if (numericIds.some(id => Number.isNaN(v[id]))) errors.push('Compila tutti i campi numerici.');
-  if (numericIds.some(id => Number.isFinite(v[id]) && v[id] < 0)) errors.push('Non sono ammessi valori negativi.');
-  if (!(v.rooms > 0)) errors.push('Il numero di camere deve essere maggiore di zero.');
-  if (!(v.days > 0)) errors.push('I giorni del mese devono essere maggiori di zero.');
-  ['occupancy','otaCommission','agencyCommission','desiredIncrease','taxRate'].forEach(id => {
-    if (Number.isFinite(v[id]) && (v[id] < 0 || v[id] > 100)) errors.push('Le percentuali devono essere comprese tra 0 e 100.');
-  });
-  if (Number.isFinite(v.otaCommission) && Number.isFinite(v.agencyCommission) && v.otaCommission + v.agencyCommission >= 100) {
-    errors.push('La somma delle commissioni OTA e agenzia deve essere inferiore al 100%.');
-  }
-  return [...new Set(errors)];
-}
-
-function calculate(v, grossOverride = null) {
-  const available = v.rooms * v.days;
-  const sold = available * (v.occupancy / 100);
-  const gross = grossOverride ?? sold * v.averagePrice;
-  const autResidual = (100 - v.otaCommission) / 100;
-  const agencyResidual = (100 - v.otaCommission - v.agencyCommission) / 100;
-  const fixed = v.includeFixedCosts ? v.fixedCosts : 0;
-  const cleaning = v.includeCleaning ? v.cleaningCost : 0;
-  const taxFactor = v.includeTaxes ? 1 - v.taxRate / 100 : 1;
-  const applyCosts = base => Math.max(0, base - fixed - cleaning) * taxFactor;
-  const autNet = applyCosts(gross * autResidual);
-  const agencyNet = applyCosts(gross * agencyResidual);
-  const breakEvenGross = autNet / agencyResidual;
-  const targetNet = autNet * (1 + v.desiredIncrease / 100);
-  const higherGross = targetNet / agencyResidual;
-  return {
-    available, sold, avgOccupied: sold / v.days, gross, autResidual, agencyResidual,
-    otaCost: gross * v.otaCommission / 100, agencyCost: gross * v.agencyCommission / 100,
-    autNet, agencyNet, autAnnual: autNet * 12, agencyAnnual: agencyNet * 12,
-    breakEvenGross, breakEvenEuro: breakEvenGross - gross, breakEvenPct: (breakEvenGross / gross - 1) * 100,
-    targetNet, higherGross, higherEuro: higherGross - gross, higherPct: (higherGross / gross - 1) * 100,
-    goalGrossAut: v.minimumNet / autResidual, goalGrossAgency: v.minimumNet / agencyResidual
-  };
-}
-
-function setText(id, value) { const el = $(id); if (el) el.textContent = value; }
-function showErrors(list) { const box = $('errorBox'); box.style.display = list.length ? 'block' : 'none'; box.textContent = list.join(' '); }
-function saveCurrent(v) { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(v)); } catch {} }
-
-function updateTables(v) {
-  $('scenarioTableBody').innerHTML = scenarioGrosses.map(g => { const r = calculate(v,g); return `<tr><td>${money(g)}</td><td>${money(r.autNet)}</td><td>${money(r.agencyNet)}</td><td>${money(r.autNet-r.agencyNet)}</td><td>${percent(r.autResidual*100)}</td><td>${percent(r.agencyResidual*100)}</td></tr>`; }).join('');
-  $('breakEvenTableBody').innerHTML = scenarioGrosses.map(g => { const r = calculate(v,g); return `<tr><td>${money(g)}</td><td>${money(r.autNet)}</td><td>${money(r.breakEvenGross)}</td><td>${money(r.breakEvenEuro)}</td><td>${percent(r.breakEvenPct)}</td></tr>`; }).join('');
-}
-
-function update() {
-  const v = readValues();
-  const validationErrors = validate(v);
-  showErrors(validationErrors);
-  saveCurrent(v);
-  if (validationErrors.length) return false;
-  const r = calculate(v);
-  setText('availableNights', number(r.available)); setText('soldNights', number(r.sold)); setText('averageOccupiedRooms', number(r.avgOccupied)); setText('grossRevenue', money(r.gross));
-  setText('simAutonomousNet', money(r.autNet)); setText('simAutonomousAnnual', money(r.autAnnual)); setText('simAgencyNet', money(r.agencyNet)); setText('simAgencyAnnual', money(r.agencyAnnual));
-  setText('autGross', money(r.gross)); setText('autOtaCost', money(r.otaCost)); setText('autResidual', percent(r.autResidual*100)); setText('autNet', money(r.autNet)); setText('autAnnual', money(r.autAnnual));
-  setText('agencyGross', money(r.gross)); setText('agencyOtaCost', money(r.otaCost)); setText('agencyCost', money(r.agencyCost)); setText('agencyTotalCost', money(r.otaCost+r.agencyCost)); setText('agencyResidual', percent(r.agencyResidual*100)); setText('agencyNet', money(r.agencyNet)); setText('agencyAnnual', money(r.agencyAnnual));
-  setText('breakEvenAutNet', money(r.autNet)); setText('breakEvenAgencyGross', money(r.breakEvenGross)); setText('breakEvenIncreaseEuro', money(r.breakEvenEuro)); setText('breakEvenIncreasePercent', percent(r.breakEvenPct));
-  setText('higherTargetNet', money(r.targetNet)); setText('higherAgencyGross', money(r.higherGross)); setText('higherIncreaseEuro', money(r.higherEuro)); setText('higherIncreasePercent', percent(r.higherPct));
-  setText('goalNetAut', money(v.minimumNet)); setText('goalGrossAut', money(r.goalGrossAut)); setText('goalNetAgency', money(v.minimumNet)); setText('goalGrossAgency', money(r.goalGrossAgency));
-  const delta = r.agencyNet - v.minimumNet;
-  const status = $('goalStatus');
-  status.className = 'status ' + (delta >= 0 ? 'good' : delta >= -v.minimumNet * .1 ? 'warning' : 'bad');
-  status.textContent = delta >= 0 ? `Obiettivo raggiunto: superato di ${money(delta)}.` : `Obiettivo non raggiunto: mancano ${money(-delta)}.`;
-  updateTables(v);
-  return true;
-}
-
-let updateTimer;
-function scheduleUpdate() { clearTimeout(updateTimer); updateTimer = setTimeout(update, 120); }
-function apply(v) { numericIds.forEach(id => $(id).value = String(v[id] ?? DEFAULTS[id]).replace('.', ',')); checkIds.forEach(id => $(id).checked = Boolean(v[id])); $('language').value = v.language || 'it'; update(); }
-function load() { try { apply({...DEFAULTS, ...JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}')}); } catch { apply(DEFAULTS); } }
-function reset() { localStorage.removeItem(STORAGE_KEY); apply(DEFAULTS); $('generatedMessage').value=''; $('scenarioName').value=''; }
-function scenarios() { try { return JSON.parse(localStorage.getItem(SCENARIOS_KEY) || '[]'); } catch { return []; } }
-function storeScenarios(list) { localStorage.setItem(SCENARIOS_KEY, JSON.stringify(list)); }
-function escapeHtml(s) { return String(s).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
-function renderScenarios() { const list=scenarios(), root=$('scenarioList'); if(!list.length){root.innerHTML='<div class="hint">Nessuno scenario salvato.</div>';return;} root.innerHTML=''; list.forEach(s=>{const el=document.createElement('div');el.className='scenario-item';el.innerHTML=`<div><strong>${escapeHtml(s.name)}</strong><div class="meta">${new Date(s.createdAt).toLocaleString('it-IT')}</div></div><div class="scenario-actions"><button class="btn-secondary">Carica</button><button class="btn-danger">Elimina</button></div>`;const [a,b]=el.querySelectorAll('button');a.onclick=()=>apply({...DEFAULTS,...s.values});b.onclick=()=>{storeScenarios(list.filter(x=>x.id!==s.id));renderScenarios();};root.appendChild(el);}); }
-function saveScenario(){const name=$('scenarioName').value.trim(),v=readValues(),e=validate(v);if(!name)e.push('Inserisci un nome per lo scenario.');showErrors(e);if(e.length)return;const list=scenarios();list.unshift({id:crypto.randomUUID?crypto.randomUUID():String(Date.now()),name,createdAt:new Date().toISOString(),values:v});storeScenarios(list);$('scenarioName').value='';renderScenarios();}
-function italian(v,r){return `Simulazione con ${number(v.rooms)} camere, occupazione del ${percent(v.occupancy)} e prezzo medio di ${money(v.averagePrice)}.\n\nFatturato lordo mensile: ${money(r.gross)}.\nNetto gestione autonoma: ${money(r.autNet)}.\nNetto gestione tramite agenzia: ${money(r.agencyNet)}.\n\nPer pareggiare la gestione autonoma, l'agenzia dovrebbe produrre ${money(r.breakEvenGross)} di lordo. Per ottenere un netto superiore del ${percent(v.desiredIncrease)}, dovrebbe produrre ${money(r.higherGross)}.`;}
-function bangla(v,r){return `মাসিক মোট আয়: ${money(r.gross)}।\nনিজে পরিচালনায় নেট আয়: ${money(r.autNet)}।\nএজেন্সির মাধ্যমে নেট আয়: ${money(r.agencyNet)}।\nসমান নেট আয়ের জন্য এজেন্সির মোট আয় দরকার ${money(r.breakEvenGross)}।`;}
-function generate(){const v=readValues(),e=validate(v);showErrors(e);if(e.length)return;const r=calculate(v);$('generatedMessage').value=v.language==='bn'?bangla(v,r):italian(v,r);}
-async function copy(){if(!$('generatedMessage').value.trim())generate();const text=$('generatedMessage').value;if(!text)return;try{await navigator.clipboard.writeText(text);}catch{$('generatedMessage').select();document.execCommand('copy');}const c=$('copyConfirmation');c.style.display='inline';setTimeout(()=>c.style.display='none',1600);}
-
-function addCalculateButton(){const toolbar=document.querySelector('.toolbar');if(!toolbar||$('calculateBtn'))return;const button=document.createElement('button');button.id='calculateBtn';button.type='button';button.className='btn-primary';button.textContent='Calcola ora';button.addEventListener('click',update);toolbar.prepend(button);}
-
-function installUxEnhancements(){
-  const style=document.createElement('style');
-  style.textContent=`
-    .change-toast{position:sticky;top:8px;z-index:50;display:none;margin:0 0 16px;padding:13px 15px;border-radius:13px;background:#172a22;color:#fff;box-shadow:0 10px 26px rgba(0,0,0,.18);font-size:.92rem}
-    .change-toast.show{display:block;animation:toastIn .18s ease-out}.change-toast strong{display:block;margin-bottom:3px}.change-toast small{color:#d5e7de}
-    .result-explanation{margin:-8px 0 16px;color:#5c6963;font-size:.9rem;line-height:1.5}
-    .updated-flash{animation:updatedFlash 1.2s ease-out}
-    details.advanced-block{margin-bottom:20px;background:#fff;border:1px solid #dce4df;border-radius:16px;box-shadow:0 6px 18px rgba(24,33,29,.04)}
-    details.advanced-block>summary{cursor:pointer;padding:17px 20px;font-weight:800;list-style:none}details.advanced-block>summary::-webkit-details-marker{display:none}details.advanced-block>summary::after{content:'＋';float:right}details.advanced-block[open]>summary::after{content:'−'}details.advanced-block>.section{margin:0;border:0;box-shadow:none;border-top:1px solid #e7ece9;border-radius:0 0 16px 16px}
-    @keyframes toastIn{from{opacity:0;transform:translateY(-5px)}to{opacity:1;transform:none}}@keyframes updatedFlash{0%{box-shadow:0 0 0 0 rgba(31,111,80,.38)}45%{box-shadow:0 0 0 7px rgba(31,111,80,.13)}100%{box-shadow:0 0 0 0 transparent}}
-  `;
-  document.head.appendChild(style);
-
-  const toast=document.createElement('div');toast.id='changeToast';toast.className='change-toast';toast.setAttribute('role','status');toast.setAttribute('aria-live','polite');
-  const errorBox=$('errorBox');errorBox.parentNode.insertBefore(toast,errorBox.nextSibling);
-
-  const explanations={
-    'Riepilogo decisionale':'Sintesi pratica della convenienza: confronta i netti e indica quanto deve produrre l’agenzia per pareggiare.',
-    'Occupazione necessaria per raggiungere l’obiettivo':'Mostra quante notti e quale percentuale di occupazione servono per ottenere il netto mensile desiderato.',
-    'Simulatore camere':'Traduce camere, giorni, prezzo e occupazione in notti vendute, fatturato e netto stimato.',
-    'Confronto dettagliato':'Scompone il lordo nelle singole commissioni e mostra quanto rimane nelle due modalità.',
-    'Pareggio e guadagno superiore':'Calcola quanto lordo aggiuntivo deve generare l’agenzia per pareggiare o superare la gestione autonoma.',
-    'Obiettivo netto minimo':'Indica il fatturato lordo necessario per raggiungere l’obiettivo netto impostato.',
-    'Tabella scenari lordi':'Confronto rapido dei netti ottenibili con diversi livelli di fatturato.',
-    'Tabella pareggio agenzia':'Mostra, per ogni lordo autonomo, quanto dovrebbe produrre l’agenzia per lasciare lo stesso netto.'
-  };
-  document.querySelectorAll('section.section').forEach(section=>{const h=section.querySelector(':scope > h2');if(!h||!explanations[h.textContent.trim()])return;const p=document.createElement('p');p.className='result-explanation';p.textContent=explanations[h.textContent.trim()];h.insertAdjacentElement('afterend',p);});
-
-  ['Tabella scenari lordi','Tabella pareggio agenzia','Scenari salvati','Generatore di messaggio'].forEach(title=>{
-    const section=[...document.querySelectorAll('section.section')].find(s=>s.querySelector(':scope > h2')?.textContent.trim()===title);
-    if(!section)return;const details=document.createElement('details');details.className='advanced-block';const summary=document.createElement('summary');summary.textContent=title;section.querySelector('h2')?.remove();details.append(summary);section.parentNode.insertBefore(details,section);details.append(section);
-  });
-}
-
-function notifyFieldChange(id){
-  const meta=fieldMeta[id];if(!meta)return;
-  const toast=$('changeToast');
-  toast.innerHTML=`<strong>Aggiornato: ${meta.label}</strong><small>Risultati interessati: ${meta.sections.join(' · ')}</small>`;
-  toast.classList.remove('show');void toast.offsetWidth;toast.classList.add('show');
-  clearTimeout(notifyFieldChange.timer);notifyFieldChange.timer=setTimeout(()=>toast.classList.remove('show'),3200);
-  const sectionNames=new Set(meta.sections);
-  document.querySelectorAll('section.section').forEach(section=>{const title=section.querySelector(':scope > h2')?.textContent.trim();if(title&&[...sectionNames].some(name=>title.includes(name)||name.includes(title))){section.classList.remove('updated-flash');void section.offsetWidth;section.classList.add('updated-flash');}});
-}
-
-function bindEvents(){
-  numericIds.forEach(id=>{const el=$(id);['input','change','blur'].forEach(evt=>el.addEventListener(evt,scheduleUpdate));el.addEventListener('change',()=>notifyFieldChange(id));el.addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();update();notifyFieldChange(id);el.blur();}});});
-  checkIds.forEach(id=>$(id).addEventListener('change',()=>{update();notifyFieldChange(id);}));
-  $('language').addEventListener('change',()=>{update();if($('generatedMessage').value)generate();});
-  $('resetBtn').addEventListener('click',reset);$('saveScenarioBtn').addEventListener('click',saveScenario);$('generateMessageBtn').addEventListener('click',generate);$('copyMessageBtn').addEventListener('click',copy);$('scrollMessageBtn').addEventListener('click',()=>$('messageSection').scrollIntoView({behavior:'smooth'}));
-}
-
-addCalculateButton();installUxEnhancements();bindEvents();load();renderScenarios();
-
-const test=calculate(DEFAULTS);console.assert(test.available===150&&Math.abs(test.gross-6300)<.01&&Math.abs(test.autNet-4819.5)<.01&&Math.abs(test.agencyNet-3559.5)<.01,'Test iniziale fallito');
-const increase10=calculate(DEFAULTS).higherGross;const increase20=calculate({...DEFAULTS,desiredIncrease:20}).higherGross;console.assert(increase20>increase10,'Test incremento netto desiderato fallito');
+'use strict';
+const $=id=>document.getElementById(id), C=window.AppCore;
+const monetaryIds=['averagePrice','minimumNet','autCleaning','autFixed','autMaintenance','agencyCleaning','agencyFixed','agencyExtra','agencyMaintenance'];
+const numericIds=['rooms','days','averagePrice','occupancy','otaCommission','agencyCommission','minimumNet','desiredIncrease','taxRate','autCleaning','autFixed','autMaintenance','agencyCleaning','agencyFixed','agencyExtra','agencyMaintenance'];
+const checkIds=['includeTaxes','autIncludeCleaning','autIncludeFixed','autIncludeMaintenance','agencyIncludeCleaning','agencyIncludeFixed','agencyIncludeExtra','agencyIncludeMaintenance'];
+const defaults={rooms:5,days:30,averagePrice:70,occupancy:60,otaCommission:23.5,agencyCommission:20,agencyCommissionBase:'gross',minimumNet:2000,desiredIncrease:10,taxRate:0,includeTaxes:false,autCleaning:0,autFixed:0,autMaintenance:0,agencyCleaning:0,agencyFixed:0,agencyExtra:0,agencyMaintenance:0,autIncludeCleaning:false,autIncludeFixed:false,autIncludeMaintenance:false,agencyIncludeCleaning:false,agencyIncludeFixed:false,agencyIncludeExtra:false,agencyIncludeMaintenance:false,language:'it'};
+const STORAGE='affittacamere-current-v7',SCENARIOS='affittacamere-scenarios-v2';
+const money=v=>Number.isFinite(v)?new Intl.NumberFormat('it-IT',{style:'currency',currency:'EUR'}).format(v):'Non calcolabile';
+const num=(v,d=2)=>Number.isFinite(v)?new Intl.NumberFormat('it-IT',{maximumFractionDigits:d}).format(v):'—';
+const pct=v=>Number.isFinite(v)?`${num(v,2)}%`:'—';
+function read(){const v={};numericIds.forEach(id=>v[id]=C.parseLocaleNumber($(id).value,{monetary:monetaryIds.includes(id)}));checkIds.forEach(id=>v[id]=$(id).checked);v.agencyCommissionBase=$('agencyCommissionBase').value;v.language=$('language').value;return v}
+function apply(v){numericIds.forEach(id=>$(id).value=String(v[id]??defaults[id]).replace('.',','));checkIds.forEach(id=>$(id).checked=!!v[id]);$('agencyCommissionBase').value=v.agencyCommissionBase||'gross';$('language').value=v.language||'it';update()}
+function save(v){try{localStorage.setItem(STORAGE,JSON.stringify(v))}catch{}}
+function set(id,val){const e=$(id);if(e)e.textContent=val}
+function resultLabel(v){return C.allCostsEnabled(v)?'Netto stimato':(v.includeTaxes||C.modeCosts(v,'aut')>0||C.modeCosts(v,'agency')>0?'Margine dopo i costi selezionati':'Residuo dopo commissioni')}
+function markLoss(panelId,value,labelId){const panel=$(panelId),loss=$(panelId==='autPanel'?'autLoss':'agencyLoss'),valueEl=$(labelId);panel.classList.toggle('bad-panel',value<0);valueEl.classList.toggle('negative',value<0);loss.style.display=value<0?'block':'none';loss.textContent=value<0?'Scenario in perdita':''}
+function renderRequired(v,mode){const x=C.requiredOccupancy(v,mode),s=mode==='aut'?'Aut':'Agency',panel=$(mode==='aut'?'requiredAutPanel':'requiredAgencyPanel');if(!x){set('requiredOccupancy'+s,'Non calcolabile');set('requiredDetails'+s,'Controlla i valori e le percentuali.');panel.className='result-panel bad-panel';return}set('requiredOccupancy'+s,pct(x.occupancy));set('requiredDetails'+s,`${num(x.nights)} notti, ${num(x.roomsPerDay)} camere al giorno, lordo ${money(x.gross)}.`);panel.className='result-panel '+(x.occupancy>100?'bad-panel':v.occupancy>=x.occupancy?'good-panel':'');}
+function assumptions(v){const base=v.agencyCommissionBase==='gross'?'sul fatturato lordo':'sul fatturato dopo OTA';const lines=[`Commissione OTA applicata sul fatturato lordo: ${pct(v.otaCommission)}.`,`Commissione agenzia calcolata ${base}.`,`Imposte ${v.includeTaxes?`incluse al ${pct(v.taxRate)}`:'escluse'}.`,`Costi autonoma inclusi: ${money(C.modeCosts(v,'aut'))}.`,`Costi agenzia inclusi: ${money(C.modeCosts(v,'agency'))}.`,`Valori annuali calcolati moltiplicando il risultato mensile per 12.`];$('assumptions').innerHTML=lines.map(x=>`<li>${x}</li>`).join('')}
+function update(){const v=read(),errors=C.validate(v);$('errorBox').style.display=errors.length?'block':'none';$('errorBox').innerHTML=errors.map(e=>`<div>${e}</div>`).join('');save(v);if(errors.length)return false;const r=C.calculate(v),label=resultLabel(v);set('resultNote',C.allCostsEnabled(v)?'Tutti i costi selezionati e le imposte stimate sono inclusi: il risultato è un netto stimato.':'Le imposte sul reddito e gli altri costi non selezionati non sono inclusi nel risultato.');set('availableNights',num(r.available));set('soldNights',num(r.sold));set('averageOccupiedRooms',num(r.avgOccupied));set('grossRevenue',money(r.gross));set('autResultLabel',label);set('agencyResultLabel',label);set('autNet',money(r.autNet));set('agencyNet',money(r.agencyNet));set('autOtaCost',money(r.otaCost));set('agencyOtaCost',money(r.otaCost));set('agencyCost',`${money(r.agencyCost)} (${v.agencyCommissionBase==='gross'?'sul lordo':'dopo OTA'})`);set('autCosts',money(r.autCosts));set('agencyCosts',money(r.agencyCosts));set('autAnnual',money(r.autAnnual));set('agencyAnnual',money(r.agencyAnnual));set('breakEvenGross',money(r.breakEvenGross));set('breakEvenEuro',money(r.breakEvenEuro));set('breakEvenPct',pct(r.breakEvenPct));set('higherGross',money(r.higherGross));set('goalGrossAut',money(r.goalGrossAut));set('goalGrossAgency',money(r.goalGrossAgency));
+const diff=r.autNet-r.agencyNet;set('decisionMonthlyDifference',money(diff));set('decisionBreakEven',money(r.breakEvenGross));set('decisionHigher',money(r.higherGross));set('decisionMinimum',`Aut. ${money(r.goalGrossAut)} · Ag. ${money(r.goalGrossAgency)}`);$('decisionSummary').innerHTML=`Con lo stesso fatturato lordo, la gestione <strong>${diff>=0?'autonoma':'tramite agenzia'}</strong> lascia <strong>${money(Math.abs(diff))}</strong> in più al mese. L’agenzia diventa equivalente se produce almeno <strong>${money(r.breakEvenGross)}</strong> lordi. Per ottenere il ${pct(v.desiredIncrease)} in più deve produrre <strong>${money(r.higherGross)}</strong> lordi. L’obiettivo minimo di ${money(v.minimumNet)} ${r.autNet>=v.minimumNet?'è':'non è'} raggiunto in autonomia e ${r.agencyNet>=v.minimumNet?'è':'non è'} raggiunto con agenzia.`;
+markLoss('autPanel',r.autNet,'autNet');markLoss('agencyPanel',r.agencyNet,'agencyNet');renderRequired(v,'aut');renderRequired(v,'agency');assumptions(v);window.lastCalculation={v,r};return true}
+let timer;function schedule(e){clearTimeout(timer);timer=setTimeout(()=>{update();notify(e?.target?.id)},120)}
+const fieldNames={rooms:'Numero camere',days:'Giorni',averagePrice:'Prezzo medio',occupancy:'Occupazione',otaCommission:'Commissione OTA',agencyCommission:'Commissione agenzia',agencyCommissionBase:'Base commissione agenzia',minimumNet:'Obiettivo mensile',desiredIncrease:'Guadagno desiderato',includeTaxes:'Imposte'};
+function notify(id){if(!id)return;const t=$('changeToast');t.innerHTML=`<strong>Aggiornato: ${fieldNames[id]||'costi dello scenario'}</strong><br><small>Riepilogo, risultati e formule inverse sono stati ricalcolati.</small>`;t.classList.add('show');clearTimeout(notify.t);notify.t=setTimeout(()=>t.classList.remove('show'),2500);document.querySelectorAll('.decision,.result-panel').forEach(x=>{x.classList.remove('updated');void x.offsetWidth;x.classList.add('updated')})}
+function costsText(v,mode){const parts=[],p=mode==='aut'?'aut':'agency';if(v[p+'IncludeCleaning'])parts.push(`pulizie ${money(v[p+'Cleaning'])}`);if(v[p+'IncludeFixed'])parts.push(`costi fissi ${money(v[p+'Fixed'])}`);if(v[p+'IncludeMaintenance'])parts.push(`manutenzione/altri costi ${money(v[p+'Maintenance'])}`);if(mode==='agency'&&v.agencyIncludeExtra)parts.push(`extra agenzia ${money(v.agencyExtra)}`);return parts.length?parts.join(', '):'nessun costo aggiuntivo selezionato'}
+function italian(v,r){const diff=r.autNet-r.agencyNet,better=diff>=0?'gestione autonoma':'gestione tramite agenzia';return `La simulazione considera ${num(v.rooms)} camere e ${num(v.days)} giorni nel mese, per un totale di ${num(r.available)} notti disponibili. Con un’occupazione media del ${pct(v.occupancy)} vengono vendute circa ${num(r.sold)} notti, equivalenti a ${num(r.avgOccupied)} camere occupate mediamente ogni giorno. Il prezzo medio è ${money(v.averagePrice)} e il fatturato lordo mensile stimato è ${money(r.gross)}.\n\nLa commissione media Booking/OTA è del ${pct(v.otaCommission)}, pari a ${money(r.otaCost)}. Questa percentuale rappresenta una media complessiva di commissioni, costi di transazione e IVA sui servizi OTA.\n\nNella gestione autonoma sono inclusi: ${costsText(v,'aut')}. Il risultato mensile è ${money(r.autNet)} e quello annuale, calcolato moltiplicando per 12, è ${money(r.autAnnual)}.\n\nNella gestione tramite agenzia, la commissione del ${pct(v.agencyCommission)} è calcolata ${v.agencyCommissionBase==='gross'?'sul fatturato lordo':'sul fatturato dopo le commissioni OTA'} ed è pari a ${money(r.agencyCost)}. Sono inoltre inclusi: ${costsText(v,'agency')}. Il risultato mensile è ${money(r.agencyNet)} e quello annuale è ${money(r.agencyAnnual)}.\n\nCon lo stesso fatturato lordo, la differenza è di ${money(Math.abs(diff))} al mese e ${money(Math.abs(diff)*12)} all’anno a favore della ${better}. Per lasciare lo stesso risultato della gestione autonoma, l’agenzia deve produrre almeno ${money(r.breakEvenGross)} lordi: ${money(r.breakEvenEuro)} in più, cioè il ${pct(r.breakEvenPct)}. Per ottenere un guadagno superiore del ${pct(v.desiredIncrease)}, deve produrre circa ${money(r.higherGross)} lordi.\n\nL’obiettivo minimo mensile di ${money(v.minimumNet)} ${r.autNet>=v.minimumNet?'viene':'non viene'} raggiunto con la gestione autonoma e ${r.agencyNet>=v.minimumNet?'viene':'non viene'} raggiunto con l’agenzia.\n\nConclusione: a parità di fatturato, in questa simulazione risulta più favorevole la ${better}. L’agenzia può diventare equivalente o migliore solo se aumenta il fatturato fino ai livelli indicati. ${C.allCostsEnabled(v)?'Il risultato include tutti i costi selezionati e le imposte stimate.':'Le imposte e gli altri costi non selezionati non sono inclusi.'}`}
+function bangla(v,r){const diff=r.autNet-r.agencyNet,better=diff>=0?'নিজে পরিচালনা':'এজেন্সির মাধ্যমে পরিচালনা';return `এই হিসাবটি ${num(v.rooms)}টি কক্ষ এবং মাসের ${num(v.days)} দিনের ওপর ভিত্তি করে করা হয়েছে। মোট ${num(r.available)}টি রাত বিক্রির জন্য পাওয়া যায়। গড় দখল হার ${pct(v.occupancy)} হলে প্রায় ${num(r.sold)}টি রাত বিক্রি হয়, অর্থাৎ প্রতিদিন গড়ে ${num(r.avgOccupied)}টি কক্ষ ভাড়া থাকে। প্রতি রাতের গড় মূল্য ${money(v.averagePrice)} এবং আনুমানিক মাসিক মোট আয় ${money(r.gross)}।\n\nBooking/OTA-এর গড় কমিশন ${pct(v.otaCommission)}, অর্থাৎ ${money(r.otaCost)}। এই শতাংশের মধ্যে গড় কমিশন, লেনদেন খরচ এবং OTA পরিষেবার ভ্যাট ধরা হয়েছে।\n\nনিজে পরিচালনার ক্ষেত্রে অন্তর্ভুক্ত খরচ: ${costsText(v,'aut')}। মাসিক ফলাফল ${money(r.autNet)} এবং ১২ মাস ধরে বার্ষিক ফলাফল ${money(r.autAnnual)}।\n\nএজেন্সির কমিশন ${pct(v.agencyCommission)} এবং এটি ${v.agencyCommissionBase==='gross'?'মোট আয়ের ওপর':'OTA কমিশন বাদ দেওয়ার পরের আয়ের ওপর'} হিসাব করা হয়েছে। কমিশনের পরিমাণ ${money(r.agencyCost)}। এজেন্সির ক্ষেত্রে অন্তর্ভুক্ত খরচ: ${costsText(v,'agency')}। মাসিক ফলাফল ${money(r.agencyNet)} এবং বার্ষিক ফলাফল ${money(r.agencyAnnual)}।\n\nএকই মোট আয়ে দুই ব্যবস্থার মাসিক পার্থক্য ${money(Math.abs(diff))} এবং বার্ষিক পার্থক্য ${money(Math.abs(diff)*12)}; এই হিসাবে ${better} বেশি সুবিধাজনক। নিজে পরিচালনার সমান ফল পেতে এজেন্সিকে অন্তত ${money(r.breakEvenGross)} মোট আয় করতে হবে, অর্থাৎ ${money(r.breakEvenEuro)} বা ${pct(r.breakEvenPct)} বেশি। ${pct(v.desiredIncrease)} বেশি লাভ পেতে এজেন্সির প্রয়োজন প্রায় ${money(r.higherGross)} মোট আয়।\n\nমাসিক ন্যূনতম লক্ষ্য ${money(v.minimumNet)} নিজে পরিচালনায় ${r.autNet>=v.minimumNet?'পূরণ হয়েছে':'পূরণ হয়নি'} এবং এজেন্সির মাধ্যমে ${r.agencyNet>=v.minimumNet?'পূরণ হয়েছে':'পূরণ হয়নি'}।\n\nসহজ সিদ্ধান্ত: একই মোট আয়ে ${better} বেশি অর্থ রেখে দেয়। এজেন্সি তখনই সমান বা ভালো হবে, যখন উপরে দেখানো পরিমাণ পর্যন্ত মোট আয় বাড়াতে পারবে। ${C.allCostsEnabled(v)?'নির্বাচিত সব খরচ ও আনুমানিক কর ফলাফলে অন্তর্ভুক্ত।':'নির্বাচন না করা কর ও অন্যান্য খরচ ফলাফলে অন্তর্ভুক্ত নয়।'}`}
+function generate(){if(!update())return;const {v,r}=window.lastCalculation;$('generatedMessage').value=v.language==='bn'?bangla(v,r):italian(v,r)}
+async function copy(){if(!$('generatedMessage').value)generate();try{await navigator.clipboard.writeText($('generatedMessage').value)}catch{$('generatedMessage').select();document.execCommand('copy')}$('copyConfirmation').textContent='Copiato';setTimeout(()=>$('copyConfirmation').textContent='',1500)}
+function scenarios(){try{return JSON.parse(localStorage.getItem(SCENARIOS)||'[]')}catch{return[]}}function renderScenarios(){const list=scenarios();$('scenarioList').innerHTML=list.length?list.map(s=>`<div class="scenario-item"><span><strong>${s.name}</strong><br><small>${new Date(s.date).toLocaleString('it-IT')}</small></span><span><button data-load="${s.id}" class="btn-secondary">Carica</button> <button data-delete="${s.id}" class="btn-secondary">Elimina</button></span></div>`).join(''):'Nessuno scenario salvato.'}$('scenarioList').addEventListener('click',e=>{const l=e.target.dataset.load,d=e.target.dataset.delete,list=scenarios();if(l)apply({...defaults,...list.find(x=>x.id===l).values});if(d){localStorage.setItem(SCENARIOS,JSON.stringify(list.filter(x=>x.id!==d)));renderScenarios()}})
+function saveScenario(){const name=$('scenarioName').value.trim();if(!name){$('errorBox').style.display='block';$('errorBox').textContent='Inserisci un nome per lo scenario.';return}const list=scenarios();list.unshift({id:String(Date.now()),name,date:new Date().toISOString(),values:read()});localStorage.setItem(SCENARIOS,JSON.stringify(list));$('scenarioName').value='';renderScenarios()}
+function weighted(){const ids=['bookingShare','bookingRate','otherShare','otherRate','directShare','directRate'],v={};ids.forEach(id=>v[id]=C.parseLocaleNumber($(id).value,{monetary:false}));const total=v.bookingShare+v.otherShare+v.directShare;if(!ids.every(id=>Number.isFinite(v[id]))||Math.abs(total-100)>.01){set('weightedOtaResult',' Le quote devono sommare 100%.');return}const avg=(v.bookingShare*v.bookingRate+v.otherShare*v.otherRate+v.directShare*v.directRate)/100;$('otaCommission').value=String(avg).replace('.',',');set('weightedOtaResult',` Media applicata: ${pct(avg)}`);update()}
+function reset(){localStorage.removeItem(STORAGE);apply(defaults)}
+[...numericIds,...checkIds,'agencyCommissionBase'].forEach(id=>{const e=$(id);e.addEventListener('input',schedule);e.addEventListener('change',schedule)});$('calculateBtn').onclick=()=>{update();notify('manual')};$('resetBtn').onclick=reset;$('generateMessageBtn').onclick=generate;$('copyMessageBtn').onclick=copy;$('saveScenarioBtn').onclick=saveScenario;$('applyWeightedOta').onclick=weighted;
+try{apply({...defaults,...JSON.parse(localStorage.getItem(STORAGE)||'{}')})}catch{apply(defaults)}renderScenarios();
